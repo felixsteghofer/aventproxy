@@ -55,23 +55,23 @@ Got a model that isn't listed, or one that misbehaves? A [diagnostics dump](docs
 
 ### Integration (HACS)
 
-[![Open HACS repository](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=thekoma&repository=aventproxy&category=integration)
+[![Open HACS repository](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=felixsteghofer&repository=aventproxy&category=integration)
 
 Or manually:
 
 1. Open HACS → Integrations → Three dots menu → Custom repositories
-2. Add `https://github.com/thekoma/aventproxy` as category **Integration**
+2. Add `https://github.com/felixsteghofer/aventproxy` as category **Integration**
 3. Install "Philips Avent Baby Monitor"
 4. Restart Home Assistant
 
 ### Add-on (WebRTC Bridge)
 
-[![Add add-on repository](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fthekoma%2Faventproxy)
+[![Add add-on repository](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Ffelixsteghofer%2Faventproxy)
 
 Or manually:
 
 1. Settings → Add-ons → Add-on Store → Three dots → Repositories
-2. Add `https://github.com/thekoma/aventproxy`
+2. Add `https://github.com/felixsteghofer/aventproxy`
 3. Install "Philips Avent WebRTC Bridge (Addon)"
 
 **Two cards, one choice.** The store shows the bridge twice:
