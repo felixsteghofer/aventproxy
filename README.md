@@ -5,8 +5,7 @@
 > Provision once through the integration's normal UI, then use local controls,
 > native event messages and on-demand LAN video/audio. See the
 > [setup and limitations](aventproxy-lan-addon/DOCS.md). The original integration
-> and cloud-assisted WebRTC App remain available. No release has been cut for
-> these fork additions yet.
+> and cloud-assisted WebRTC App remain available. The first fork release is **v2026.10.0** (integration) with LAN Bridge App **0.1.0**.
 
 <p align="center">
   <img src="custom_components/philips_avent/brand/logo.png" alt="Philips AVENT" width="300">
