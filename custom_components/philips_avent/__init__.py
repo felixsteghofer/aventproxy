@@ -7,7 +7,8 @@ from pathlib import Path
 import aiohttp
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.event import async_call_later
 
 from .api import PhilipsAventAPI
 from .const import (
@@ -16,6 +17,8 @@ from .const import (
     CONF_COUNTRY_CODE,
     CONF_DEVICE_ID,
     CONF_ECODE,
+    CONF_LAN_DEVICES,
+    CONF_LAN_ONLY,
     CONF_PARTNER,
     CONF_SID,
     CONF_TALKBACK,
@@ -26,8 +29,16 @@ from .const import (
     TUYA_DEFAULT_COUNTRY_CODE,
     TUYA_PACKAGE_NAME,
     TUYA_SIGNING_KEY,
+    sanitize_rtsp_path,
 )
 from .coordinator import PhilipsAventCoordinator
+from .offline import (
+    build_lan_bridge_config,
+    lan_bridge_filename,
+    provision_from_coordinators,
+    validate_lan_devices,
+    write_lan_bridge_config,
+)
 from .payload import (
     BRIDGE_CONFIG_PREFIX,
     bridge_config_filename,
@@ -142,6 +153,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Philips Avent from a config entry."""
     _purge_stored_password(hass, entry)
 
+    if entry.options.get(CONF_LAN_ONLY, False):
+        return await _async_setup_lan_only(hass, entry)
+
+    # Stop exporting local credentials when returning to the cloud bridge.
+    await hass.async_add_executor_job(Path(hass.config.path(lan_bridge_filename(entry.entry_id))).unlink, True)
+
     session = aiohttp.ClientSession()
     api = PhilipsAventAPI(
         session,
@@ -253,6 +270,67 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
+async def _async_setup_lan_only(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Cold-start using provisioned metadata without constructing a cloud client."""
+    try:
+        cameras = validate_lan_devices(entry.data.get(CONF_LAN_DEVICES, []))
+    except ValueError:
+        _LOGGER.error("LAN provisioning is incomplete; configure the integration while online")
+        return False
+    coordinators = {}
+    for camera in cameras:
+        coordinator = PhilipsAventCoordinator(
+            hass, None, camera["id"], camera["name"], local_key=camera["local_key"],
+            lan_only=True, lan_ip=camera["ip"], lan_version=camera["version"],
+        )
+        coordinator.device_info = {"productId": camera["product_id"]}
+        # Start unknown, never restore historical cloud DPS as fresh camera data.
+        coordinator.async_set_updated_data({})
+        await coordinator.start_lan()
+        # An offline camera must not prevent the other camera's entities loading.
+        # async_refresh records availability without raising ConfigEntryNotReady.
+        await coordinator.async_refresh()
+        coordinators[camera["id"]] = coordinator
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
+        "api": None, "session": None, "coordinators": coordinators, "config": entry.data,
+    }
+    await _async_write_lan_bridge(hass, entry, coordinators)
+    pending = None
+
+    @callback
+    def schedule_bridge_update():
+        nonlocal pending
+        if pending is None:
+            pending = async_call_later(hass, 1, write_updated_bridge)
+
+    async def write_updated_bridge(_now):
+        nonlocal pending
+        pending = None
+        await _async_write_lan_bridge(hass, entry, coordinators)
+
+    @callback
+    def cancel_pending_bridge_update():
+        if pending is not None:
+            pending()
+
+    for coordinator in coordinators.values():
+        entry.async_on_unload(coordinator.async_add_listener(schedule_bridge_update))
+    entry.async_on_unload(cancel_pending_bridge_update)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
+    return True
+
+
+async def _async_write_lan_bridge(hass, entry, coordinators):
+    """Refresh addresses from local discovery without using the cloud."""
+    cameras = provision_from_coordinators(
+        entry.data.get("cameras", []), coordinators, entry.data.get(CONF_LAN_DEVICES, []),
+    )
+    config = build_lan_bridge_config(cameras, sanitize_rtsp_path)
+    path = Path(hass.config.path(lan_bridge_filename(entry.entry_id)))
+    await hass.async_add_executor_job(write_lan_bridge_config, path, config)
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
@@ -261,7 +339,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         data = hass.data[DOMAIN].pop(entry.entry_id)
         for coordinator in data["coordinators"].values():
             await coordinator.stop_lan()
-        await data["session"].close()
+        if data["session"] is not None:
+            await data["session"].close()
 
     return unload_ok
 
@@ -272,6 +351,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     Without this the file survived the removal, and the add-on could pick it
     over the file of whatever entry the user created next (issue #52).
     """
+    await hass.async_add_executor_job(Path(hass.config.path(lan_bridge_filename(entry.entry_id))).unlink, True)
     bridge_path = Path(hass.config.path(bridge_config_filename(entry.entry_id)))
 
     def _unlink() -> bool:

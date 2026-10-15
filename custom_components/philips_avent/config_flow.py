@@ -20,6 +20,8 @@ from .const import (
     CONF_COUNTRY_CODE,
     CONF_DEVICE_ID,
     CONF_ECODE,
+    CONF_LAN_DEVICES,
+    CONF_LAN_ONLY,
     CONF_PARTNER,
     CONF_SID,
     CONF_TALKBACK,
@@ -29,6 +31,7 @@ from .const import (
     DEFAULT_TALKBACK,
     DOMAIN,
 )
+from .offline import provision_from_coordinators, provision_media
 from .payload import strip_stored_password
 from .region import (
     COUNTRY_ROUTING,
@@ -403,8 +406,34 @@ class PhilipsAventOptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         """Manage the options."""
+        errors = {}
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            entry_data = dict(self.config_entry.data)
+            if user_input.get(CONF_LAN_ONLY, False):
+                runtime = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id, {})
+                try:
+                    cameras = provision_from_coordinators(
+                        self.config_entry.data.get("cameras", []), runtime.get("coordinators", {}),
+                        self.config_entry.data.get(CONF_LAN_DEVICES, []),
+                    )
+                    cameras = await provision_media(runtime.get("api"), cameras, entry_data.get(CONF_UID, ""))
+                except (ValueError, TuyaAPIError):
+                    errors["base"] = "lan_provisioning_required"
+                else:
+                    entry_data[CONF_LAN_DEVICES] = cameras
+            elif CONF_LAN_DEVICES in self.config_entry.data:
+                entry_data.pop(CONF_LAN_DEVICES)
+            if not errors:
+                options = {**self.config_entry.options, **user_input}
+                if not options.get(CONF_LAN_ONLY, False):
+                    options.pop(CONF_LAN_ONLY, None)
+                if entry_data != dict(self.config_entry.data):
+                    # Change mode and its provisioning atomically: an update
+                    # listener must never reload LAN mode with missing keys.
+                    self.hass.config_entries.async_update_entry(
+                        self.config_entry, data=entry_data, options=options,
+                    )
+                return self.async_create_entry(title="", data=options)
 
         current_port = self.config_entry.options.get(
             CONF_BRIDGE_PORT, DEFAULT_BRIDGE_PORT
@@ -418,6 +447,7 @@ class PhilipsAventOptionsFlowHandler(config_entries.OptionsFlow):
 
         return self.async_show_form(
             step_id="init",
+            errors=errors,
             data_schema=vol.Schema(
                 {
                     vol.Optional(CONF_BRIDGE_HOST, default=current_host): str,
@@ -425,6 +455,7 @@ class PhilipsAventOptionsFlowHandler(config_entries.OptionsFlow):
                         int, vol.Range(min=1024, max=65535)
                     ),
                     vol.Optional(CONF_TALKBACK, default=current_talkback): bool,
+                    vol.Optional(CONF_LAN_ONLY, default=self.config_entry.options.get(CONF_LAN_ONLY, False)): bool,
                 }
             ),
         )

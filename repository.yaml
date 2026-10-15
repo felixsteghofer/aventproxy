@@ -1,3 +1,3 @@
-name: "Philips Avent Baby Monitor"
-url: "https://github.com/thekoma/aventproxy"
-maintainer: "thekoma"
+name: "Philips Avent Baby Monitor (LAN fork)"
+url: "https://github.com/felixsteghofer/aventproxy"
+maintainer: "felixsteghofer"

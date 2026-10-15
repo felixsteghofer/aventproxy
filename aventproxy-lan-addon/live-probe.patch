@@ -1,0 +1,154 @@
+diff --git a/babymonitor/babymonitor-cli/src/stream.rs b/babymonitor/babymonitor-cli/src/stream.rs
+index 3068570..5dfa540 100644
+--- a/babymonitor/babymonitor-cli/src/stream.rs
++++ b/babymonitor/babymonitor-cli/src/stream.rs
+@@ -52,7 +52,7 @@ const DEFAULT_MTU: usize = 1100;
+ const H264_PAYLOAD_TYPE: u8 = 96;
+ /// The raw-H.264 input framerate handed to ffmpeg (raw Annex-B carries no
+ /// timing; ffmpeg synthesizes PTS from this).
+-const FFMPEG_INPUT_FPS: &str = "15";
++const FFMPEG_INPUT_FPS: &str = "25";
+ 
+ /// Where the re-muxed stream is sent.
+ #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+@@ -121,6 +121,10 @@ pub struct StreamArgs {
+     #[arg(long)]
+     pub ts_out: Option<PathBuf>,
+ 
++    /// Publish live H.264/AAC to an RTSP server instead of the default HTTP sink.
++    #[arg(long, value_name = "URL")]
++    pub rtsp_out: Option<String>,
++
+     /// OFFLINE replay: read this Annex-B H.264 file, RTP-packetize it, run it
+     /// through the real depacketizer, and re-mux it (no network / no camera).
+     /// Without this flag, `stream` attempts the gated LIVE pipeline.
+@@ -424,15 +428,26 @@ pub(crate) enum OutputSink {
+ pub(crate) fn build_ffmpeg_cmd(
+     output_args: &[&str],
+     audio: Option<(&std::path::Path, u32)>,
++    finite_replay: bool,
+ ) -> Command {
+     let mut cmd = Command::new("ffmpeg");
+     cmd.args([
+         "-hide_banner",
+         "-loglevel",
+         "warning",
+-        // Raw Annex-B carries no timing; assume this input framerate …
+-        "-r",
+-        FFMPEG_INPUT_FPS,
++        // Live pipes need bounded probing; otherwise downstream discovery can
++        // time out before the audio track is emitted.
++        "-probesize",
++        "262144",
++        "-analyzeduration",
++        "1000000",
++    ]);
++    if finite_replay {
++        cmd.args(["-r", FFMPEG_INPUT_FPS]);
++    } else {
++        cmd.args(["-use_wallclock_as_timestamps", "1", "-thread_queue_size", "64"]);
++    }
++    cmd.args([
+         "-f",
+         "h264",
+         "-i",
+@@ -442,7 +457,14 @@ pub(crate) fn build_ffmpeg_cmd(
+     let rate_str;
+     if let Some((path, rate)) = audio {
+         rate_str = rate.to_string();
++        if !finite_replay {
++            cmd.args(["-use_wallclock_as_timestamps", "1", "-thread_queue_size", "64"]);
++        }
+         cmd.args([
++            "-probesize",
++            "32768",
++            "-analyzeduration",
++            "1000000",
+             "-f",
+             babymonitor_core::stream::media::audio::FFMPEG_INPUT_FORMAT,
+             "-ar",
+@@ -453,20 +475,24 @@ pub(crate) fn build_ffmpeg_cmd(
+         ])
+         .arg(path);
+     }
+-    cmd.args([
+-        "-c:v",
+-        "copy",
+-        // … and stamp each copied packet with a monotonic frame-index PTS so the
+-        // MPEG-TS muxer has well-formed timestamps (no "unset timestamps" warning;
+-        // players get a steady clock).
+-        "-bsf:v",
+-        "setts=ts=N",
+-    ]);
++    // N is a packet count, while timestamps are in input time-base ticks.
++    // Convert frames to ticks explicitly; bare N yields near-zero video time
++    // on FFmpeg builds using H.264's 1/1200000 time base and starves audio.
++    cmd.args(["-c:v", "copy"]);
++    if finite_replay {
++        cmd.arg("-bsf:v").arg(format!("setts=ts=N/({FFMPEG_INPUT_FPS}*TB)"));
++    }
+     if audio.is_some() {
+         // S16LE is not an MPEG-TS audio codec — encode to AAC (every player
+         // handles it). `-shortest` ends the mux when the shorter input ends so a
+         // finite replay terminates cleanly.
+-        cmd.args(["-c:a", "aac", "-shortest"]);
++        cmd.args(["-c:a", "aac"]);
++        // Live input clocks must run independently. FFmpeg's shortest-stream
++        // scheduler sees pre-bitstream-filter packet timestamps and can starve
++        // audio while the H.264 copy filter repairs video timestamps.
++        if finite_replay {
++            cmd.arg("-shortest");
++        }
+     }
+     cmd.args(["-f", "mpegts"])
+         .args(output_args)
+@@ -573,7 +599,7 @@ impl OutputSink {
+         }
+         let (output_args, target) = ffmpeg_output_target(mode, port, ts_out)?;
+         let args: Vec<&str> = output_args.iter().map(String::as_str).collect();
+-        let cmd = build_ffmpeg_cmd(&args, audio.as_ref().map(|a| (a.path.as_path(), a.rate)));
++        let cmd = build_ffmpeg_cmd(&args, audio.as_ref().map(|a| (a.path.as_path(), a.rate)), true);
+         spawn_ffmpeg_sink(cmd, target)
+     }
+ 
+diff --git a/babymonitor/babymonitor-cli/src/stream_live.rs b/babymonitor/babymonitor-cli/src/stream_live.rs
+index 303b82a..acdccdd 100644
+--- a/babymonitor/babymonitor-cli/src/stream_live.rs
++++ b/babymonitor/babymonitor-cli/src/stream_live.rs
+@@ -2743,13 +2743,26 @@ impl LiveAvSink {
+                     .to_string(),
+             ));
+         }
+-        let (output_args, target) =
+-            crate::stream::ffmpeg_output_target(args.output, args.port, args.ts_out.as_ref())?;
++        let (output_args, target) = if let Some(url) = &args.rtsp_out {
++            if !url.starts_with("rtsp://") {
++                return Err(Error::Transport("--rtsp-out requires an rtsp:// URL".to_string()));
++            }
++            // Final output options override the shared MPEG-TS defaults before
++            // FFmpeg starts: one video-copy pipeline and one PCM-to-AAC encoder.
++            (vec!["-c:a".into(), "aac".into(), "-ar".into(), "16000".into(),
++                  "-b:a".into(), "32k".into(),
++                  "-af".into(), "asetpts=N/SR/TB".into(),
++                  "-f".into(), "rtsp".into(),
++                  "-rtsp_transport".into(), "tcp".into(), url.clone()], url.clone())
++        } else {
++            crate::stream::ffmpeg_output_target(args.output, args.port, args.ts_out.as_ref())?
++        };
+         let args_ref: Vec<&str> = output_args.iter().map(String::as_str).collect();
+         let fifo = AudioFifo::create()?;
+         let cmd = crate::stream::build_ffmpeg_cmd(
+             &args_ref,
+             Some((fifo.path(), audio::DOWNSTREAM_SAMPLE_RATE_HZ)),
++            false,
+         );
+         let (child, stdin) = crate::stream::spawn_ffmpeg_child(cmd)?;
+         Ok(Self {
+@@ -3079,6 +3092,7 @@ mod tests {
+             port: 8554,
+             output: OutputMode::Stdout,
+             ts_out: None,
++            rtsp_out: None,
+             replay_annexb: None,
+             replay_audio: None,
+             audio_rate: audio::DOWNSTREAM_SAMPLE_RATE_HZ,

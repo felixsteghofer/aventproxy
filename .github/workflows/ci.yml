@@ -96,3 +96,47 @@ jobs:
       - name: Verify binary in container
         run: |
           docker run --rm aventproxy-bridge:test avent-webrtc-bridge --help
+
+  test-lan-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - name: Prepare isolated LAN dependencies
+        run: pip install --target tests/.runtime-deps --no-deps tinytuya==1.20.0
+      - name: Test real HA runtime without network access
+        run: |
+          mkdir -p deps
+          docker run --rm --network none --user 1000:1000 --cap-drop ALL \
+            --read-only --tmpfs /tmp:rw,nosuid,nodev,size=32m \
+            -v "$PWD:/src:ro" -v "$PWD/tests/.runtime-deps:/src/deps:ro" \
+            --entrypoint python ghcr.io/home-assistant/home-assistant:2026.10.1 \
+            /src/tests/runtime_lan_only.py
+
+  docker-lan-addon:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Test App runtime and process cleanup
+        run: python3 -m unittest discover -s aventproxy-lan-addon -p 'test_*.py' -v
+      - name: Lint LAN App
+        run: |
+          pip install ruff
+          ruff check aventproxy-lan-addon/ --ignore E501
+      - name: Build LAN App from pinned source
+        run: docker build --build-arg BUILD_ARCH=amd64 -t avent-lan-bridge:test aventproxy-lan-addon/
+      - name: Verify camera client binary
+        run: docker run --rm --network none --entrypoint babymonitor-cli avent-lan-bridge:test --help
+      - name: Verify App starts without provisioning or network access
+        run: |
+          docker run -d --name avent-lan-smoke --network none avent-lan-bridge:test
+          trap 'docker logs avent-lan-smoke; docker rm -f avent-lan-smoke' EXIT
+          for attempt in $(seq 1 20); do
+            if docker exec avent-lan-smoke python3 -c "import socket; socket.create_connection(('127.0.0.1', 38554), 1).close()"; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1

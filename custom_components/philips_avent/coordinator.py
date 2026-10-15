@@ -8,7 +8,7 @@ from datetime import timedelta
 from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util.dt import utcnow
@@ -37,10 +37,14 @@ class PhilipsAventCoordinator(DataUpdateCoordinator):
     def __init__(
         self,
         hass: HomeAssistant,
-        api: PhilipsAventAPI,
+        api: PhilipsAventAPI | None,
         camera_id: str,
         camera_name: str,
         local_key: str | None = None,
+        *,
+        lan_only: bool = False,
+        lan_ip: str | None = None,
+        lan_version: float | None = None,
     ):
         super().__init__(
             hass,
@@ -48,6 +52,11 @@ class PhilipsAventCoordinator(DataUpdateCoordinator):
             name=f"Philips Avent {camera_name}",
             update_interval=POLL_FAST,
         )
+        self.lan_only = lan_only
+        self._lan_ip = lan_ip
+        self._lan_version = lan_version
+        if lan_only:
+            self.update_interval = timedelta(seconds=15)
         self.api = api
         self.camera_id = camera_id
         self.camera_name = camera_name
@@ -70,6 +79,8 @@ class PhilipsAventCoordinator(DataUpdateCoordinator):
             self.camera_id,
             self._local_key,
             self._on_lan_dps_update,
+            ip=self._lan_ip,
+            version=self._lan_version,
         )
         await self._lan_client.start()
 
@@ -82,6 +93,16 @@ class PhilipsAventCoordinator(DataUpdateCoordinator):
     @property
     def lan_connected(self) -> bool:
         return self._lan_client is not None and self._lan_client.connected
+
+    @property
+    def lan_provisioning(self) -> dict:
+        """Private provisioning data for the options flow; never log this."""
+        client = self._lan_client
+        return {
+            "local_key": self._local_key,
+            "ip": (client._ip if client else None) or self._lan_ip,
+            "version": (client._version if client else None) or self._lan_version or 3.3,
+        }
 
     @callback
     def _on_lan_dps_update(self, dps: dict[str, Any]) -> None:
@@ -155,7 +176,16 @@ class PhilipsAventCoordinator(DataUpdateCoordinator):
         self.async_set_updated_data({**self.data, DPS_LULLABY_STATE: value})
 
     async def set_dps(self, dps: dict) -> dict:
-        """Send DPS command via LAN for instant response, plus REST for cloud sync."""
+        """Send locally; cloud mode retains its existing synchronization."""
+        if self.lan_only:
+            if not self.lan_connected:
+                raise HomeAssistantError("Camera is not connected over LAN")
+            result = await self._lan_client.set_dps(dps)
+            if not result:
+                raise HomeAssistantError("Camera LAN command failed")
+            # A successful socket write is not proof that a setting changed.
+            # The listener updates entity state only when the camera reports it.
+            return result
         if self._lan_client and self._lan_client.connected:
             result = await self._lan_client.set_dps(dps)
             if result:
@@ -205,6 +235,11 @@ class PhilipsAventCoordinator(DataUpdateCoordinator):
         return DPS_ALARM_RECORD in (self.data or {})
 
     async def _async_update_data(self) -> dict:
+        if self.lan_only:
+            if not self.lan_connected:
+                raise UpdateFailed("Camera is not connected over LAN")
+            return self.data or {}
+
         fast = poll_should_stay_fast(self.lan_connected, self.alerts_need_the_cloud)
         self.update_interval = POLL_FAST if fast else POLL_SLOW
 

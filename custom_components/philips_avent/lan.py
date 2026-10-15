@@ -37,15 +37,18 @@ class TuyaLANClient:
         device_id: str,
         local_key: str,
         on_dps_update: Callable[[dict[str, Any]], None],
+        *,
+        ip: str | None = None,
+        version: float | None = None,
     ) -> None:
         self._hass = hass
         self._device_id = device_id
         self._local_key = local_key
         self._on_dps_update = on_dps_update
         self._device: tinytuya.Device | None = None
-        self._ip: str | None = None
+        self._ip: str | None = ip
         self._announced_version: float | None = None
-        self._version: float | None = None
+        self._version: float | None = version
         self._task: asyncio.Task | None = None
         self._stop_event = asyncio.Event()
         self.connected: bool = False
@@ -267,6 +270,7 @@ class TuyaLANClient:
             return None
 
         def _send():
+            confirmed = {}
             d = tinytuya.Device(
                 self._device_id,
                 self._ip,
@@ -276,12 +280,19 @@ class TuyaLANClient:
             d.set_socketTimeout(SOCKET_TIMEOUT)
             try:
                 for key, value in dps.items():
-                    d.set_value(key, value)
+                    response = d.set_value(key, value)
+                    if isinstance(response, dict) and ("Err" in response or "Error" in response):
+                        raise OSError("Camera rejected LAN command")
+                    if isinstance(response, dict) and isinstance(response.get("dps"), dict):
+                        confirmed.update(response["dps"])
+                return confirmed
             finally:
                 d.close()
 
         try:
-            await self._hass.async_add_executor_job(_send)
+            confirmed = await self._hass.async_add_executor_job(_send)
+            if confirmed:
+                self._on_dps_update(confirmed)
             return {"success": True}
         except Exception as ex:  # noqa: BLE001 - a failed command falls back to the cloud path
             _LOGGER.warning("LAN set_dps failed: %s", ex)

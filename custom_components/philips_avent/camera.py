@@ -58,6 +58,17 @@ class AventCamera(Camera):
         )
         self._attr_device_info = build_device_info(coordinator, cam_id)
 
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if self.coordinator.lan_only:
+            self.async_on_remove(self.coordinator.async_add_listener(self.async_write_ha_state))
+
+    @property
+    def available(self) -> bool:
+        if self.coordinator.lan_only:
+            return self.coordinator.lan_connected
+        return super().available
+
     async def stream_source(self) -> str:
         return self._stream_url
 

@@ -157,3 +157,7 @@ def build_rtsp_url(host: str, port: int, name: str, cam_id: str) -> str:
     cannot be opened (issue #62).
     """
     return f"rtsp://{host or DEFAULT_BRIDGE_HOST}:{port}/{sanitize_rtsp_path(name, cam_id)}"
+
+# Persisted, owner-provisioned LAN operation; cloud mode remains the default.
+CONF_LAN_ONLY = "lan_only"
+CONF_LAN_DEVICES = "lan_devices"

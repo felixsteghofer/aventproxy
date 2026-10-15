@@ -1,11 +1,19 @@
 # Philips Avent Baby Monitor — Home Assistant Integration
 
+> **LAN-only fork:** This fork adds a **LAN only (no cloud access)** integration
+> option and a separate [Philips Avent LAN Bridge App](aventproxy-lan-addon/README.md).
+> Provision once through the integration's normal UI, then use local controls,
+> native event messages and on-demand LAN video/audio. See the
+> [setup and limitations](aventproxy-lan-addon/DOCS.md). The original integration
+> and cloud-assisted WebRTC App remain available. No release has been cut for
+> these fork additions yet.
+
 <p align="center">
   <img src="custom_components/philips_avent/brand/logo.png" alt="Philips AVENT" width="300">
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![CI](https://github.com/thekoma/aventproxy/actions/workflows/ci.yml/badge.svg)](https://github.com/thekoma/aventproxy/actions/workflows/ci.yml)
+[![CI](https://github.com/felixsteghofer/aventproxy/actions/workflows/ci.yml/badge.svg)](https://github.com/felixsteghofer/aventproxy/actions/workflows/ci.yml)
 [![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 
 Home Assistant integration for Philips Avent SCD973/SCD923 baby monitors, providing local streaming, temperature monitoring, night light control, lullaby playback, and motion/sound alerts.

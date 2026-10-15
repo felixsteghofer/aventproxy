@@ -25,6 +25,7 @@ SECRET_KEYS = frozenset({
     "token", "access_token", "refresh_token", "sessionid", "session_id",
     # Device
     "localkey", "local_key", "psk", "secret", "devkey", "dev_key",
+    "media_auth_password", "sender_id",
     # Location
     "lat", "lon", "lng", "latitude", "longitude",
 })

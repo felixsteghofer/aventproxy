@@ -98,3 +98,6 @@ uv.lock
 # Vendor APK pulled for protocol research (issues #74, #75). Large, and not ours
 # to redistribute. Kept locally so nobody has to re-download it; never committed.
 .apk-research/
+
+# Isolated real-HA test dependencies
+tests/.runtime-deps/
