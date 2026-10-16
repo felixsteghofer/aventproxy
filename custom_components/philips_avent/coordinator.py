@@ -237,6 +237,12 @@ class PhilipsAventCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self) -> dict:
         if self.lan_only:
             if not self.lan_connected:
+                if self.last_update_success:
+                    _LOGGER.info("Camera %s is offline on LAN", self.camera_name)
+                # Offline is expected for monitors powered on only when needed.
+                # Keep the failed-update availability semantics, but prevent the
+                # coordinator from logging this transition as a polling error.
+                self.last_update_success = False
                 raise UpdateFailed("Camera is not connected over LAN")
             return self.data or {}
 
