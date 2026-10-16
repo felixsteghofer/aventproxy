@@ -3,6 +3,7 @@
 - Fix repeated Supervisor watchdog restarts by checking bridge health inside the container.
 - Check the loopback API and RTSP server without starting media or requiring cameras to be online.
 - Keep both listeners private; no additional network ports or configuration are needed.
+- Support Supervisor's native architecture argument when building without Docker BuildKit.
 - Update the App, then enable its Watchdog toggle if it was disabled as a workaround.
 
 # 0.1.0
