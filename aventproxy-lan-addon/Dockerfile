@@ -19,7 +19,7 @@ RUN case "$TARGETARCH" in \
     && curl -fLsS https://raw.githubusercontent.com/AlexxIT/go2rtc/v1.9.14/LICENSE -o /src/LICENSE-go2rtc
 
 FROM debian:bookworm-slim
-ARG BUILD_VERSION=0.1.0
+ARG BUILD_VERSION=0.1.1
 ARG BUILD_ARCH
 LABEL io.hass.type="app" io.hass.version="${BUILD_VERSION}" io.hass.arch="${BUILD_ARCH}"
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg python3 tini ca-certificates \
@@ -27,5 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg python3 
     && find / -xdev -type f \( -perm -4000 -o -perm -2000 \) -exec chmod a-s {} +
 COPY --from=builder /src/babymonitor/target/release/babymonitor-cli /src/go2rtc /usr/local/bin/
 COPY --from=builder /src/LICENSE /src/NOTICES.txt /src/LICENSE-go2rtc /usr/share/licenses/avent-lan-bridge/
-COPY producer.py run.py /opt/avent/
+COPY producer.py run.py healthcheck.py /opt/avent/
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD ["/usr/bin/python3", "/opt/avent/healthcheck.py"]
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/bin/python3", "/opt/avent/run.py"]

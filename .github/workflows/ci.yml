@@ -133,8 +133,8 @@ jobs:
         run: |
           docker run -d --name avent-lan-smoke --network none avent-lan-bridge:test
           trap 'docker logs avent-lan-smoke; docker rm -f avent-lan-smoke' EXIT
-          for attempt in $(seq 1 20); do
-            if docker exec avent-lan-smoke python3 -c "import socket; socket.create_connection(('127.0.0.1', 38554), 1).close()"; then
+          for attempt in $(seq 1 60); do
+            if [ "$(docker inspect --format '{{.State.Health.Status}}' avent-lan-smoke)" = healthy ]; then
               exit 0
             fi
             sleep 1

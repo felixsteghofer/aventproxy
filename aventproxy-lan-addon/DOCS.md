@@ -21,6 +21,13 @@ reloads changed provisioning without restarting HA. Cameras without a known LAN
 address are omitted until local discovery finds them. Multiple integration entries
 are merged; conflicting stream names are rejected.
 
+The watchdog uses Docker's in-container health check to probe the loopback API and
+RTSP server. It does not request media or contact cameras: monitors can be powered
+off whenever they are not needed. Supervisor can restart an unhealthy bridge with
+the Watchdog toggle enabled. Version 0.1.1 replaces the old host-address TCP probe,
+which could not reach the private listener; re-enable Watchdog after updating if
+you previously disabled it to stop repeated restarts.
+
 # What still needs the cloud?
 
 The initial account login and one-time media credential provisioning require cloud

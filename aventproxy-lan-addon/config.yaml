@@ -1,5 +1,5 @@
 name: Philips Avent LAN Bridge
-version: "0.1.0"
+version: "0.1.1"
 slug: avent_lan_bridge
 url: https://github.com/felixsteghofer/aventproxy/tree/main/aventproxy-lan-addon
 description: Experimental on-demand Philips Avent LAN video and audio without cloud access
@@ -11,7 +11,6 @@ boot: manual
 init: false
 host_network: true
 tmpfs: true
-watchdog: tcp://[HOST]:38554
 stage: experimental
 map:
   - type: homeassistant_config
