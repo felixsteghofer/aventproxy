@@ -148,7 +148,7 @@ class TuyaLANClient:
             )
             self._announced_version = announced
         if not self._ip:
-            _LOGGER.warning("Device %s not found on LAN", self._device_id)
+            _LOGGER.info("Device %s not found on LAN", self._device_id)
             return False
 
         device = await self._connect_at_any_version(self._ip)
