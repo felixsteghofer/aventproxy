@@ -20,6 +20,7 @@ from .const import (
     CONF_COUNTRY_CODE,
     CONF_DEVICE_ID,
     CONF_ECODE,
+    CONF_KEEP_STREAM_OPEN,
     CONF_LAN_DEVICES,
     CONF_LAN_ONLY,
     CONF_PARTNER,
@@ -456,6 +457,9 @@ class PhilipsAventOptionsFlowHandler(config_entries.OptionsFlow):
                     ),
                     vol.Optional(CONF_TALKBACK, default=current_talkback): bool,
                     vol.Optional(CONF_LAN_ONLY, default=self.config_entry.options.get(CONF_LAN_ONLY, False)): bool,
+                    vol.Optional(
+                        CONF_KEEP_STREAM_OPEN, default=self.config_entry.options.get(CONF_KEEP_STREAM_OPEN, True)
+                    ): bool,
                 }
             ),
         )

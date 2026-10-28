@@ -160,4 +160,5 @@ def build_rtsp_url(host: str, port: int, name: str, cam_id: str) -> str:
 
 # Persisted, owner-provisioned LAN operation; cloud mode remains the default.
 CONF_LAN_ONLY = "lan_only"
+CONF_KEEP_STREAM_OPEN = "keep_stream_open"
 CONF_LAN_DEVICES = "lan_devices"

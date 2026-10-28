@@ -250,7 +250,7 @@ class OfflineRuntimeTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_camera_availability_updates_after_local_reconnection(self):
         c = await self.boot()
-        camera = AventCamera(c, CAMERA["id"], 38554, "192.0.2.20")
+        camera = AventCamera(c, CAMERA["id"], 38554, "192.0.2.20", keep_stream_open=False)
         camera.hass = self.hass
         camera.async_on_remove = MagicMock()
         camera.async_write_ha_state = MagicMock()

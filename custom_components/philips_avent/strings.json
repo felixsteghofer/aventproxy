@@ -61,13 +61,15 @@
           "bridge_host": "Bridge host",
           "bridge_port": "Bridge RTSP port",
           "talkback": "Two-way audio (talkback)",
-          "lan_only": "LAN only (no cloud access)"
+          "lan_only": "LAN only (no cloud access)",
+          "keep_stream_open": "Keep LAN streams open while online"
         },
         "data_description": {
           "bridge_host": "Where Home Assistant can reach the WebRTC bridge. Leave it as localhost when you use the add-on; set the container name or IP address if you run the bridge yourself, elsewhere.",
           "bridge_port": "Port the WebRTC bridge listens on (default: 38554)",
           "talkback": "Leave this off unless a client of yours actually talks back through the stream. Asking the camera for two-way audio makes the monitor stop a playing lullaby and restart it from the beginning when you close the stream.",
-          "lan_only": "Use provisioned local keys and the external LAN stream bridge. Requires an initial online setup. Camera values remain unknown until reported locally."
+          "lan_only": "Use provisioned local keys and the external LAN stream bridge. Requires an initial online setup. Camera values remain unknown until reported locally.",
+          "keep_stream_open": "In LAN-only mode, keep one shared stream running while each monitor is connected and privacy mode is off. Uses resources even with no viewers. Disable to return to on-demand streaming. This controls stream lifetime instead of the camera preload preference."
         }
       }
     },

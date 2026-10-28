@@ -28,6 +28,29 @@ the Watchdog toggle enabled. Version 0.1.1 replaces the old host-address TCP pro
 which could not reach the private listener; re-enable Watchdog after updating if
 you previously disabled it to stop repeated restarts.
 
+# Keeping streams ready
+
+Integration **2026.10.1** keeps one shared Home Assistant stream open for each
+connected monitor in LAN-only mode, even without viewers. Opening another viewer
+or fetching a preview reuses the bridge's existing camera producer. Previews use
+HA's stream frame cache rather than launching FFmpeg for every snapshot.
+
+The existing local connection monitor controls availability; offline cameras are
+not continuously opened for media. Streams stop on disconnection, privacy mode,
+integration unload and HA shutdown, and resume when the monitor reconnects or
+leaves privacy mode. HA's stream worker retries media failures with backoff.
+Nothing records video or audio to disk.
+
+To restore on-demand operation, turn off **Keep LAN streams open while online**
+under the integration's **Configure** dialog. This option defaults on and applies
+only in LAN-only mode; cloud-assisted streaming is unchanged. In this mode the
+integration manages stream lifetime instead of the camera's preload preference.
+Existing dashboard snapshot refresh intervals are independent of stream lifetime.
+
+Continuous streaming consumes camera Wi-Fi bandwidth and bridge/HA CPU and RAM
+even when no dashboard is open. The figures below describe earlier on-demand
+playback measurements, not an extended two-camera keep-open test.
+
 # What still needs the cloud?
 
 The initial account login and one-time media credential provisioning require cloud

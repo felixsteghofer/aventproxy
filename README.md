@@ -3,7 +3,7 @@
 > **LAN-only fork:** This fork adds a **LAN only (no cloud access)** integration
 > option and a separate [Philips Avent LAN Bridge App](aventproxy-lan-addon/README.md).
 > Provision once through the integration's normal UI, then use local controls,
-> native event messages and on-demand LAN video/audio. See the
+> native event messages and shared LAN video/audio kept ready while online. See the
 > [setup and limitations](aventproxy-lan-addon/DOCS.md). The original integration
 > and cloud-assisted WebRTC App remain available. The first fork release is **v2026.10.0** (integration) with LAN Bridge App **0.1.0**.
 
